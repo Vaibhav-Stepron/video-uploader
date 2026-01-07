@@ -32,9 +32,6 @@ import {
     getAllUploads,
     deleteUpload,
     clearAllUploads,
-    isPasswordSet,
-    savePassword,
-    verifyPassword,
 } from "@/lib/indexedDB";
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
@@ -64,32 +61,33 @@ const VideoUploader = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [passwordInput, setPasswordInput] = useState("");
     const [passwordError, setPasswordError] = useState("");
-    const [isFirstTime, setIsFirstTime] = useState(false);
 
     const fileInputRef = useRef(null);
     const abortControllerRef = useRef(null);
     const wakeLockRef = useRef(null);
 
-    // Initialize IndexedDB and load history
+    // Check for existing authentication on mount
     useEffect(() => {
-        const loadHistory = async () => {
+        const isAuth = localStorage.getItem('videoUploaderAuth') === 'true';
+        if (isAuth) {
+            setIsAuthenticated(true);
+        }
+    }, []);
+
+    // Initialize IndexedDB
+    useEffect(() => {
+        const initialize = async () => {
             try {
                 await initDB();
-                const passwordExists = await isPasswordSet();
-
-                if (passwordExists) {
-                    setIsFirstTime(false);
-                    setIsLoading(false);
-                } else {
-                    setIsFirstTime(true);
-                    setIsLoading(false);
-                }
+                // Keep loading screen visible for minimum time
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                setIsLoading(false);
             } catch (error) {
                 console.error("Failed to initialize:", error);
                 setIsLoading(false);
             }
         };
-        loadHistory();
+        initialize();
     }, []);
 
     // Load uploads after authentication
@@ -408,38 +406,18 @@ const VideoUploader = () => {
     };
 
     // Handle password submission
-    const handlePasswordSubmit = async (e) => {
+    const handlePasswordSubmit = (e) => {
         e.preventDefault();
         setPasswordError("");
 
         const correctPassword = "Stepron@123";
 
-        if (isFirstTime) {
-            // First time - set the password
-            if (passwordInput === correctPassword) {
-                try {
-                    await savePassword(passwordInput);
-                    setIsAuthenticated(true);
-                    setPasswordInput("");
-                } catch (error) {
-                    setPasswordError("Failed to save password. Please try again.");
-                }
-            } else {
-                setPasswordError("Incorrect password. Please use: Stepron@123");
-            }
+        if (passwordInput === correctPassword) {
+            localStorage.setItem('videoUploaderAuth', 'true');
+            setIsAuthenticated(true);
+            setPasswordInput("");
         } else {
-            // Verify existing password
-            try {
-                const isValid = await verifyPassword(passwordInput);
-                if (isValid) {
-                    setIsAuthenticated(true);
-                    setPasswordInput("");
-                } else {
-                    setPasswordError("Incorrect password. Please try again.");
-                }
-            } catch (error) {
-                setPasswordError("Authentication failed. Please try again.");
-            }
+            setPasswordError("Incorrect password. Please try again.");
         }
     };
 
@@ -473,12 +451,10 @@ const VideoUploader = () => {
                             <Lock className="h-8 w-8 text-primary" />
                         </div>
                         <CardTitle className="text-2xl font-bold">
-                            {isFirstTime ? "Set Password" : "Enter Password"}
+                            Enter Password
                         </CardTitle>
                         <CardDescription>
-                            {isFirstTime
-                                ? "First time setup - Enter the password to continue"
-                                : "Enter your password to access the uploader"}
+                            Enter password to access the video uploader
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -500,7 +476,7 @@ const VideoUploader = () => {
                             </div>
                             <Button type="submit" className="w-full">
                                 <Lock className="mr-2 h-4 w-4" />
-                                {isFirstTime ? "Set Password" : "Unlock"}
+                                Unlock
                             </Button>
                         </form>
                         <div className="mt-4 text-center">
