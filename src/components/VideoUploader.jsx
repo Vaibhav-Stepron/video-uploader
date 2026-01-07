@@ -13,6 +13,7 @@ import {
     Loader2,
     Calendar,
     ClipboardList,
+    Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,9 @@ import {
     getAllUploads,
     deleteUpload,
     clearAllUploads,
+    isPasswordSet,
+    savePassword,
+    verifyPassword,
 } from "@/lib/indexedDB";
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
@@ -54,23 +58,100 @@ const VideoUploader = () => {
     const [copiedId, setCopiedId] = useState(null);
     const [selectedDate, setSelectedDate] = useState("");
     const [copiedAll, setCopiedAll] = useState(false);
+    const [showClearConfirm, setShowClearConfirm] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, fileName: "" });
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [passwordInput, setPasswordInput] = useState("");
+    const [passwordError, setPasswordError] = useState("");
+    const [isFirstTime, setIsFirstTime] = useState(false);
 
     const fileInputRef = useRef(null);
     const abortControllerRef = useRef(null);
+    const wakeLockRef = useRef(null);
 
     // Initialize IndexedDB and load history
     useEffect(() => {
         const loadHistory = async () => {
             try {
                 await initDB();
-                const uploads = await getAllUploads();
-                setUploadHistory(uploads);
+                const passwordExists = await isPasswordSet();
+
+                if (passwordExists) {
+                    setIsFirstTime(false);
+                    setIsLoading(false);
+                } else {
+                    setIsFirstTime(true);
+                    setIsLoading(false);
+                }
             } catch (error) {
-                console.error("Failed to load upload history:", error);
+                console.error("Failed to initialize:", error);
+                setIsLoading(false);
             }
         };
         loadHistory();
     }, []);
+
+    // Load uploads after authentication
+    useEffect(() => {
+        const loadUploads = async () => {
+            if (isAuthenticated) {
+                try {
+                    const uploads = await getAllUploads();
+                    setUploadHistory(uploads);
+                } catch (error) {
+                    console.error("Failed to load upload history:", error);
+                }
+            }
+        };
+        loadUploads();
+    }, [isAuthenticated]);
+
+    // Keep screen awake during upload and warn before closing
+    useEffect(() => {
+        const requestWakeLock = async () => {
+            if (uploading && 'wakeLock' in navigator) {
+                try {
+                    wakeLockRef.current = await navigator.wakeLock.request('screen');
+                    console.log('Wake Lock activated');
+                } catch (err) {
+                    console.error('Wake Lock error:', err);
+                }
+            }
+        };
+
+        const releaseWakeLock = async () => {
+            if (wakeLockRef.current) {
+                try {
+                    await wakeLockRef.current.release();
+                    wakeLockRef.current = null;
+                    console.log('Wake Lock released');
+                } catch (err) {
+                    console.error('Wake Lock release error:', err);
+                }
+            }
+        };
+
+        const handleBeforeUnload = (e) => {
+            if (uploading) {
+                e.preventDefault();
+                e.returnValue = 'Upload in progress. Are you sure you want to leave? The upload will be cancelled.';
+                return e.returnValue;
+            }
+        };
+
+        if (uploading) {
+            requestWakeLock();
+            window.addEventListener('beforeunload', handleBeforeUnload);
+        } else {
+            releaseWakeLock();
+        }
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            releaseWakeLock();
+        };
+    }, [uploading]);
 
     const saveToIndexedDB = async (fileName, url, fileSize, uploadDuration) => {
         try {
@@ -261,6 +342,7 @@ const VideoUploader = () => {
         try {
             await clearAllUploads();
             setUploadHistory([]);
+            setShowClearConfirm(false);
         } catch (error) {
             console.error("Failed to clear history:", error);
         }
@@ -270,6 +352,7 @@ const VideoUploader = () => {
         try {
             await deleteUpload(id);
             setUploadHistory((prev) => prev.filter((item) => item.id !== id));
+            setDeleteConfirm({ show: false, id: null, fileName: "" });
         } catch (error) {
             console.error("Failed to remove item:", error);
         }
@@ -324,14 +407,136 @@ const VideoUploader = () => {
         }
     };
 
+    // Handle password submission
+    const handlePasswordSubmit = async (e) => {
+        e.preventDefault();
+        setPasswordError("");
+
+        const correctPassword = "Stepron@123";
+
+        if (isFirstTime) {
+            // First time - set the password
+            if (passwordInput === correctPassword) {
+                try {
+                    await savePassword(passwordInput);
+                    setIsAuthenticated(true);
+                    setPasswordInput("");
+                } catch (error) {
+                    setPasswordError("Failed to save password. Please try again.");
+                }
+            } else {
+                setPasswordError("Incorrect password. Please use: Stepron@123");
+            }
+        } else {
+            // Verify existing password
+            try {
+                const isValid = await verifyPassword(passwordInput);
+                if (isValid) {
+                    setIsAuthenticated(true);
+                    setPasswordInput("");
+                } else {
+                    setPasswordError("Incorrect password. Please try again.");
+                }
+            } catch (error) {
+                setPasswordError("Authentication failed. Please try again.");
+            }
+        }
+    };
+
+    // Show password screen if not authenticated
+    if (!isAuthenticated) {
+        if (isLoading) {
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-background">
+                    <div className="text-center space-y-4">
+                        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+                            <Video className="h-10 w-10 text-primary animate-pulse" />
+                        </div>
+                        <div className="space-y-2">
+                            <h2 className="text-2xl font-bold">Video Uploader</h2>
+                            <Badge variant="outline" className="text-xs">
+                                v{APP_VERSION}
+                            </Badge>
+                            <p className="text-sm text-muted-foreground">Loading...</p>
+                        </div>
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background p-4">
+                <Card className="w-full max-w-md shadow-lg">
+                    <CardHeader className="text-center">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                            <Lock className="h-8 w-8 text-primary" />
+                        </div>
+                        <CardTitle className="text-2xl font-bold">
+                            {isFirstTime ? "Set Password" : "Enter Password"}
+                        </CardTitle>
+                        <CardDescription>
+                            {isFirstTime
+                                ? "First time setup - Enter the password to continue"
+                                : "Enter your password to access the uploader"}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                            <div className="space-y-2">
+                                <input
+                                    type="password"
+                                    placeholder="Enter password"
+                                    value={passwordInput}
+                                    onChange={(e) => setPasswordInput(e.target.value)}
+                                    className="w-full rounded-md border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                    autoFocus
+                                />
+                                {passwordError && (
+                                    <p className="text-sm text-red-600 dark:text-red-400">
+                                        {passwordError}
+                                    </p>
+                                )}
+                            </div>
+                            <Button type="submit" className="w-full">
+                                <Lock className="mr-2 h-4 w-4" />
+                                {isFirstTime ? "Set Password" : "Unlock"}
+                            </Button>
+                        </form>
+                        <div className="mt-4 text-center">
+                            <Badge variant="outline" className="text-xs">
+                                v{APP_VERSION}
+                            </Badge>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    // Show loading screen while initializing
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <div className="text-center space-y-4">
+                    <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+                        <Video className="h-10 w-10 text-primary animate-pulse" />
+                    </div>
+                    <div className="space-y-2">
+                        <h2 className="text-2xl font-bold">Video Uploader</h2>
+                        <Badge variant="outline" className="text-xs">
+                            v{APP_VERSION}
+                        </Badge>
+                        <p className="text-sm text-muted-foreground">Loading...</p>
+                    </div>
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen p-4 md:p-8">
-            {/* Version Badge */}
-            <div className="fixed top-2 right-2 z-50">
-                <Badge variant="outline" className="text-xs text-muted-foreground">
-                    v{APP_VERSION}
-                </Badge>
-            </div>
             <div className="max-w-3xl mx-auto space-y-6">
                 {/* Header Card */}
                 <Card className="shadow-lg border-0">
@@ -533,7 +738,7 @@ const VideoUploader = () => {
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={handleClearHistory}
+                                        onClick={() => setShowClearConfirm(true)}
                                         className="text-muted-foreground hover:text-destructive"
                                     >
                                         <Trash2 className="mr-1 h-4 w-4" />
@@ -643,7 +848,7 @@ const VideoUploader = () => {
                                                 size="icon"
                                                 variant="ghost"
                                                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                                onClick={() => handleRemoveHistoryItem(item.id)}
+                                                onClick={() => setDeleteConfirm({ show: true, id: item.id, fileName: item.fileName })}
                                                 title="Delete"
                                             >
                                                 <Trash2 className="h-4 w-4" />
@@ -656,6 +861,79 @@ const VideoUploader = () => {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Clear All Confirmation Modal */}
+            {showClearConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-background rounded-lg shadow-lg p-6 max-w-sm mx-4 border">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
+                                <AlertCircle className="h-5 w-5 text-destructive" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-lg">Clear All History</h3>
+                                <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                            </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-6">
+                            Are you sure you want to delete all {uploadHistory.length} uploaded video records? This will permanently remove all history.
+                        </p>
+                        <div className="flex gap-2 justify-end">
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowClearConfirm(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={handleClearHistory}
+                            >
+                                <Trash2 className="mr-1 h-4 w-4" />
+                                Delete All
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Individual Delete Confirmation Modal */}
+            {deleteConfirm.show && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-background rounded-lg shadow-lg p-6 max-w-sm mx-4 border">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
+                                <AlertCircle className="h-5 w-5 text-destructive" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-lg">Delete Video</h3>
+                                <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                            </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                            Are you sure you want to delete this video?
+                        </p>
+                        <p className="text-sm font-medium mb-6 truncate">
+                            {deleteConfirm.fileName}
+                        </p>
+                        <div className="flex gap-2 justify-end">
+                            <Button
+                                variant="outline"
+                                onClick={() => setDeleteConfirm({ show: false, id: null, fileName: "" })}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={() => handleRemoveHistoryItem(deleteConfirm.id)}
+                            >
+                                <Trash2 className="mr-1 h-4 w-4" />
+                                Delete
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
