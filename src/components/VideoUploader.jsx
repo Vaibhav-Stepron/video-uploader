@@ -33,7 +33,7 @@ import {
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
 const PARALLEL_UPLOADS = 3;
-const BASE_URL = "https://bimiscwebapi-test.azurewebsites.net/api/Users";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 const VideoUploader = () => {
     const [selectedFile, setSelectedFile] = useState(null);
@@ -263,18 +263,17 @@ const VideoUploader = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4 md:p-8">
+        <div className="min-h-screen p-4 md:p-8">
             <div className="max-w-3xl mx-auto space-y-6">
                 {/* Header Card */}
-                <Card>
-                    <CardHeader className="text-center">
-                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                            <Video className="h-8 w-8 text-primary" />
+                <Card className="shadow-lg border-0">
+                    <CardHeader className="text-center pb-4">
+                        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                            <Video className="h-7 w-7 text-primary" />
                         </div>
-                        <CardTitle className="text-3xl">Video Uploader</CardTitle>
-                        <CardDescription>
-                            Chunked uploads with parallel processing • 5MB chunks • 3 parallel
-                            uploads
+                        <CardTitle className="text-2xl font-bold">Video Uploader</CardTitle>
+                        <CardDescription className="text-sm">
+                            Chunked uploads with parallel processing
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -312,11 +311,7 @@ const VideoUploader = () => {
                                     <p className="text-sm text-muted-foreground">
                                         or click to browse
                                     </p>
-                                    <div className="mt-4 flex gap-2">
-                                        <Badge variant="secondary">No size limit</Badge>
-                                        <Badge variant="secondary">5MB chunks</Badge>
-                                        <Badge variant="secondary">3 parallel</Badge>
-                                    </div>
+
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-4 p-6">
@@ -455,12 +450,17 @@ const VideoUploader = () => {
                     </CardContent>
                 </Card>
 
-                {/* Upload History */}
-                {uploadHistory.length > 0 && (
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between">
+                {/* Upload History - Always visible */}
+                <Card className="shadow-lg border-0">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
                                 <CardTitle className="text-lg">Upload History</CardTitle>
+                                <Badge variant="secondary" className="text-xs">
+                                    {uploadHistory.length} {uploadHistory.length === 1 ? 'file' : 'files'}
+                                </Badge>
+                            </div>
+                            {uploadHistory.length > 0 && (
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -470,62 +470,74 @@ const VideoUploader = () => {
                                     <Trash2 className="mr-1 h-4 w-4" />
                                     Clear All
                                 </Button>
+                            )}
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {uploadHistory.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-8 text-center">
+                                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                                    <Clock className="h-6 w-6 text-muted-foreground" />
+                                </div>
+                                <p className="text-sm font-medium text-muted-foreground">No uploads yet</p>
+                                <p className="text-xs text-muted-foreground/70 mt-1">Your uploaded videos will appear here</p>
                             </div>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            {uploadHistory.map((item) => (
-                                <div
-                                    key={item.id}
-                                    className="group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
-                                >
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-                                        <Video className="h-5 w-5 text-primary" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-medium truncate text-sm">
-                                            {item.fileName}
-                                        </p>
-                                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                                            <span className="flex items-center gap-1">
-                                                <HardDrive className="h-3 w-3" />
-                                                {formatFileSize(item.fileSize)}
-                                            </span>
-                                            <span className="flex items-center gap-1">
-                                                <Clock className="h-3 w-3" />
-                                                {formatDuration(item.uploadDuration)}
-                                            </span>
-                                            <span>{formatDate(item.uploadedAt)}</span>
+                        ) : (
+                            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                                {uploadHistory.map((item) => (
+                                    <div
+                                        key={item.id}
+                                        className="group flex items-center gap-3 rounded-lg border bg-card p-3 transition-all hover:bg-muted/50 hover:shadow-sm"
+                                    >
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                                            <Video className="h-5 w-5 text-primary" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-medium truncate text-sm">
+                                                {item.fileName}
+                                            </p>
+                                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
+                                                <span className="flex items-center gap-1">
+                                                    <HardDrive className="h-3 w-3" />
+                                                    {formatFileSize(item.fileSize)}
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" />
+                                                    {formatDuration(item.uploadDuration)}
+                                                </span>
+                                                <span>{formatDate(item.uploadedAt)}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-1 shrink-0">
+                                            <Button
+                                                size="icon"
+                                                variant={copiedId === item.id ? "default" : "ghost"}
+                                                className="h-8 w-8"
+                                                onClick={() => handleCopyUrl(item.url, item.id)}
+                                                title="Copy URL"
+                                            >
+                                                {copiedId === item.id ? (
+                                                    <Check className="h-4 w-4" />
+                                                ) : (
+                                                    <Copy className="h-4 w-4" />
+                                                )}
+                                            </Button>
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                onClick={() => handleRemoveHistoryItem(item.id)}
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
                                         </div>
                                     </div>
-                                    <div className="flex gap-1 shrink-0">
-                                        <Button
-                                            size="icon"
-                                            variant={copiedId === item.id ? "default" : "ghost"}
-                                            className="h-8 w-8"
-                                            onClick={() => handleCopyUrl(item.url, item.id)}
-                                            title="Copy URL"
-                                        >
-                                            {copiedId === item.id ? (
-                                                <Check className="h-4 w-4" />
-                                            ) : (
-                                                <Copy className="h-4 w-4" />
-                                            )}
-                                        </Button>
-                                        <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                            onClick={() => handleRemoveHistoryItem(item.id)}
-                                            title="Delete"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            ))}
-                        </CardContent>
-                    </Card>
-                )}
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
             </div>
         </div>
     );
