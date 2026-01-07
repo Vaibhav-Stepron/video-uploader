@@ -36,6 +36,7 @@ import {
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
 const PARALLEL_UPLOADS = 3;
 const BASE_URL = import.meta.env.VITE_API_BASE_URL
+const APP_VERSION = "0.0.1";
 
 const VideoUploader = () => {
     const [selectedFile, setSelectedFile] = useState(null);
@@ -325,6 +326,12 @@ const VideoUploader = () => {
 
     return (
         <div className="min-h-screen p-4 md:p-8">
+            {/* Version Badge */}
+            <div className="fixed top-2 right-2 z-50">
+                <Badge variant="outline" className="text-xs text-muted-foreground">
+                    v{APP_VERSION}
+                </Badge>
+            </div>
             <div className="max-w-3xl mx-auto space-y-6">
                 {/* Header Card */}
                 <Card className="shadow-lg border-0">
