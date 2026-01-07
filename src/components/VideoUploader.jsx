@@ -11,6 +11,8 @@ import {
     AlertCircle,
     CheckCircle2,
     Loader2,
+    Calendar,
+    ClipboardList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,6 +51,8 @@ const VideoUploader = () => {
     const [totalChunks, setTotalChunks] = useState(0);
     const [uploadStartTime, setUploadStartTime] = useState(null);
     const [copiedId, setCopiedId] = useState(null);
+    const [selectedDate, setSelectedDate] = useState("");
+    const [copiedAll, setCopiedAll] = useState(false);
 
     const fileInputRef = useRef(null);
     const abortControllerRef = useRef(null);
@@ -114,8 +118,11 @@ const VideoUploader = () => {
         const start = chunkIndex * CHUNK_SIZE;
         const chunk = file.slice(start, Math.min(start + CHUNK_SIZE, file.size));
 
+        // Encode filename to handle spaces and special characters
+        const encodedFileName = encodeURIComponent(file.name);
+
         const formData = new FormData();
-        formData.append("FileName", file.name);
+        formData.append("FileName", encodedFileName);
         formData.append("MimeType", file.type);
         formData.append("ChunkIndex", chunkIndex.toString());
         formData.append("TotalChunks", totalChunks.toString());
@@ -132,8 +139,11 @@ const VideoUploader = () => {
     };
 
     const finalizeUpload = async (file, totalChunks) => {
+        // Encode filename to handle spaces and special characters
+        const encodedFileName = encodeURIComponent(file.name);
+
         const formData = new FormData();
-        formData.append("FileName", file.name);
+        formData.append("FileName", encodedFileName);
         formData.append("MimeType", file.type);
         formData.append("TotalChunks", totalChunks.toString());
         formData.append("UserId", 1);
@@ -231,7 +241,9 @@ const VideoUploader = () => {
 
     const handleCopyUrl = async (url = videoUrl, id = null) => {
         try {
-            await navigator.clipboard.writeText(url);
+            // Encode spaces and special characters in the URL to make it valid
+            const encodedUrl = encodeURI(url);
+            await navigator.clipboard.writeText(encodedUrl);
             if (id) {
                 setCopiedId(id);
                 setTimeout(() => setCopiedId(null), 2000);
@@ -259,6 +271,55 @@ const VideoUploader = () => {
             setUploadHistory((prev) => prev.filter((item) => item.id !== id));
         } catch (error) {
             console.error("Failed to remove item:", error);
+        }
+    };
+
+    // Get unique dates for date picker
+    const uniqueDates = [...new Set(
+        uploadHistory.map((item) => {
+            const date = new Date(item.uploadedAt);
+            return date.toISOString().split('T')[0];
+        })
+    )].sort((a, b) => new Date(b) - new Date(a));
+
+    // Filter and sort history by date
+    const filteredHistory = uploadHistory
+        .filter((item) => {
+            if (!selectedDate) return true;
+            const itemDate = new Date(item.uploadedAt).toISOString().split('T')[0];
+            return itemDate === selectedDate;
+        })
+        .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+
+    // Global copy function - copies all visible records in Excel-compatible table format
+    const handleCopyAll = async () => {
+        try {
+            // Header row
+            const header = "File Name\tURL\tDate\tTime";
+
+            // Data rows (tab-separated for Excel compatibility)
+            const rows = filteredHistory.map((item) => {
+                const date = new Date(item.uploadedAt);
+                const formattedDate = date.toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                });
+                const formattedTime = date.toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                });
+                const encodedUrl = encodeURI(item.url);
+                return `${item.fileName}\t${encodedUrl}\t${formattedDate}\t${formattedTime}`;
+            });
+
+            const copyText = [header, ...rows].join("\n");
+
+            await navigator.clipboard.writeText(copyText);
+            setCopiedAll(true);
+            setTimeout(() => setCopiedAll(false), 2000);
+        } catch (error) {
+            console.error("Failed to copy all:", error);
         }
     };
 
@@ -453,38 +514,87 @@ const VideoUploader = () => {
                 {/* Upload History - Always visible */}
                 <Card className="shadow-lg border-0">
                     <CardHeader className="pb-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <CardTitle className="text-lg">Upload History</CardTitle>
-                                <Badge variant="secondary" className="text-xs">
-                                    {uploadHistory.length} {uploadHistory.length === 1 ? 'file' : 'files'}
-                                </Badge>
+                        <div className="flex flex-col gap-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <CardTitle className="text-lg">Upload History</CardTitle>
+                                    <Badge variant="secondary" className="text-xs">
+                                        {filteredHistory.length} {filteredHistory.length === 1 ? 'file' : 'files'}
+                                    </Badge>
+                                </div>
+                                {uploadHistory.length > 0 && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleClearHistory}
+                                        className="text-muted-foreground hover:text-destructive"
+                                    >
+                                        <Trash2 className="mr-1 h-4 w-4" />
+                                        Clear All
+                                    </Button>
+                                )}
                             </div>
                             {uploadHistory.length > 0 && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleClearHistory}
-                                    className="text-muted-foreground hover:text-destructive"
-                                >
-                                    <Trash2 className="mr-1 h-4 w-4" />
-                                    Clear All
-                                </Button>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                                        <select
+                                            value={selectedDate}
+                                            onChange={(e) => setSelectedDate(e.target.value)}
+                                            className="rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                        >
+                                            <option value="">All Dates</option>
+                                            {uniqueDates.map((date) => (
+                                                <option key={date} value={date}>
+                                                    {new Date(date).toLocaleDateString("en-US", {
+                                                        year: "numeric",
+                                                        month: "short",
+                                                        day: "numeric",
+                                                    })}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    {filteredHistory.length > 0 && (
+                                        <Button
+                                            variant={copiedAll ? "default" : "outline"}
+                                            size="sm"
+                                            onClick={handleCopyAll}
+                                            className="ml-auto"
+                                        >
+                                            {copiedAll ? (
+                                                <>
+                                                    <Check className="mr-1 h-4 w-4" />
+                                                    Copied!
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ClipboardList className="mr-1 h-4 w-4" />
+                                                    Copy All
+                                                </>
+                                            )}
+                                        </Button>
+                                    )}
+                                </div>
                             )}
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {uploadHistory.length === 0 ? (
+                        {filteredHistory.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-8 text-center">
                                 <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                                     <Clock className="h-6 w-6 text-muted-foreground" />
                                 </div>
-                                <p className="text-sm font-medium text-muted-foreground">No uploads yet</p>
-                                <p className="text-xs text-muted-foreground/70 mt-1">Your uploaded videos will appear here</p>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                    {uploadHistory.length === 0 ? "No uploads yet" : "No uploads for selected date"}
+                                </p>
+                                <p className="text-xs text-muted-foreground/70 mt-1">
+                                    {uploadHistory.length === 0 ? "Your uploaded videos will appear here" : "Try selecting a different date or 'All Dates'"}
+                                </p>
                             </div>
                         ) : (
                             <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                                {uploadHistory.map((item) => (
+                                {filteredHistory.map((item) => (
                                     <div
                                         key={item.id}
                                         className="group flex items-center gap-3 rounded-lg border bg-card p-3 transition-all hover:bg-muted/50 hover:shadow-sm"
