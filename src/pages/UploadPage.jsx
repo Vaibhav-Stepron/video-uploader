@@ -20,23 +20,13 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { cn, formatFileSize } from "@/lib/utils";
-import {
-    initDB,
-    addUpload,
-    getAllUploads,
-    deleteUpload,
-    clearAllUploads,
-} from "@/lib/indexedDB";
-import PasswordScreen from "./PasswordScreen";
-import LoadingScreen from "./LoadingScreen";
-import UploadHistory from "./UploadHistory";
-import ConfirmationModal from "./ConfirmationModal";
+import { addUpload } from "@/lib/indexedDB";
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
 const PARALLEL_UPLOADS = 3;
-const BASE_URL = import.meta.env.VITE_API_BASE_URL
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-const VideoUploader = () => {
+const UploadPage = () => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -45,69 +35,22 @@ const VideoUploader = () => {
     const [errorMessage, setErrorMessage] = useState("");
     const [videoUrl, setVideoUrl] = useState("");
     const [copied, setCopied] = useState(false);
-    const [uploadHistory, setUploadHistory] = useState([]);
     const [chunksCompleted, setChunksCompleted] = useState(0);
     const [totalChunks, setTotalChunks] = useState(0);
-    const [copiedId, setCopiedId] = useState(null);
-    const [showClearConfirm, setShowClearConfirm] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-    const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, fileName: "" });
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [passwordInput, setPasswordInput] = useState("");
-    const [passwordError, setPasswordError] = useState("");
 
     const fileInputRef = useRef(null);
     const abortControllerRef = useRef(null);
     const wakeLockRef = useRef(null);
 
-    // Check for existing authentication on mount
-    useEffect(() => {
-        const isAuth = localStorage.getItem('videoUploaderAuth') === 'true';
-        if (isAuth) {
-            setIsAuthenticated(true);
-        }
-    }, []);
-
-    // Initialize IndexedDB
-    useEffect(() => {
-        const initialize = async () => {
-            try {
-                await initDB();
-                // Keep loading screen visible for minimum time
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                setIsLoading(false);
-            } catch (error) {
-                console.error("Failed to initialize:", error);
-                setIsLoading(false);
-            }
-        };
-        initialize();
-    }, []);
-
-    // Load uploads after authentication
-    useEffect(() => {
-        const loadUploads = async () => {
-            if (isAuthenticated) {
-                try {
-                    const uploads = await getAllUploads();
-                    setUploadHistory(uploads);
-                } catch (error) {
-                    console.error("Failed to load upload history:", error);
-                }
-            }
-        };
-        loadUploads();
-    }, [isAuthenticated]);
-
     // Keep screen awake during upload and warn before closing
     useEffect(() => {
         const requestWakeLock = async () => {
-            if (uploading && 'wakeLock' in navigator) {
+            if (uploading && "wakeLock" in navigator) {
                 try {
-                    wakeLockRef.current = await navigator.wakeLock.request('screen');
-                    console.log('Wake Lock activated');
+                    wakeLockRef.current = await navigator.wakeLock.request("screen");
+                    console.log("Wake Lock activated");
                 } catch (err) {
-                    console.error('Wake Lock error:', err);
+                    console.error("Wake Lock error:", err);
                 }
             }
         };
@@ -117,9 +60,9 @@ const VideoUploader = () => {
                 try {
                     await wakeLockRef.current.release();
                     wakeLockRef.current = null;
-                    console.log('Wake Lock released');
+                    console.log("Wake Lock released");
                 } catch (err) {
-                    console.error('Wake Lock release error:', err);
+                    console.error("Wake Lock release error:", err);
                 }
             }
         };
@@ -127,33 +70,33 @@ const VideoUploader = () => {
         const handleBeforeUnload = (e) => {
             if (uploading) {
                 e.preventDefault();
-                e.returnValue = 'Upload in progress. Are you sure you want to leave? The upload will be cancelled.';
+                e.returnValue =
+                    "Upload in progress. Are you sure you want to leave? The upload will be cancelled.";
                 return e.returnValue;
             }
         };
 
         if (uploading) {
             requestWakeLock();
-            window.addEventListener('beforeunload', handleBeforeUnload);
+            window.addEventListener("beforeunload", handleBeforeUnload);
         } else {
             releaseWakeLock();
         }
 
         return () => {
-            window.removeEventListener('beforeunload', handleBeforeUnload);
+            window.removeEventListener("beforeunload", handleBeforeUnload);
             releaseWakeLock();
         };
     }, [uploading]);
 
     const saveToIndexedDB = async (fileName, url, fileSize, uploadDuration) => {
         try {
-            const newEntry = await addUpload({
+            await addUpload({
                 fileName,
                 url,
                 fileSize,
                 uploadDuration,
             });
-            setUploadHistory((prev) => [newEntry, ...prev]);
         } catch (error) {
             console.error("Failed to save to IndexedDB:", error);
         }
@@ -192,7 +135,6 @@ const VideoUploader = () => {
         const start = chunkIndex * CHUNK_SIZE;
         const chunk = file.slice(start, Math.min(start + CHUNK_SIZE, file.size));
 
-        // Encode filename to handle spaces and special characters
         const encodedFileName = encodeURIComponent(file.name);
 
         const formData = new FormData();
@@ -213,7 +155,6 @@ const VideoUploader = () => {
     };
 
     const finalizeUpload = async (file, totalChunks) => {
-        // Encode filename to handle spaces and special characters
         const encodedFileName = encodeURIComponent(file.name);
 
         const formData = new FormData();
@@ -312,90 +253,26 @@ const VideoUploader = () => {
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
-    const handleCopyUrl = async (url = videoUrl, id = null) => {
+    const handleCopyUrl = async () => {
         try {
-            // Encode spaces and special characters in the URL to make it valid
-            const encodedUrl = encodeURI(url);
+            const encodedUrl = encodeURI(videoUrl);
             await navigator.clipboard.writeText(encodedUrl);
-            if (id) {
-                setCopiedId(id);
-                setTimeout(() => setCopiedId(null), 2000);
-            } else {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-            }
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
         } catch (error) {
             console.error("Failed to copy:", error);
         }
     };
 
-    const handleClearHistory = async () => {
-        try {
-            await clearAllUploads();
-            setUploadHistory([]);
-            setShowClearConfirm(false);
-        } catch (error) {
-            console.error("Failed to clear history:", error);
-        }
-    };
-
-    const handleRemoveHistoryItem = async (id) => {
-        try {
-            await deleteUpload(id);
-            setUploadHistory((prev) => prev.filter((item) => item.id !== id));
-            setDeleteConfirm({ show: false, id: null, fileName: "" });
-        } catch (error) {
-            console.error("Failed to remove item:", error);
-        }
-    };
-
-    // Handle password submission
-    const handlePasswordSubmit = (e) => {
-        e.preventDefault();
-        setPasswordError("");
-
-        const correctPassword = "Stepron@123";
-
-        if (passwordInput === correctPassword) {
-            localStorage.setItem('videoUploaderAuth', 'true');
-            setIsAuthenticated(true);
-            setPasswordInput("");
-        } else {
-            setPasswordError("Incorrect password. Please try again.");
-        }
-    };
-
-    // Show password screen if not authenticated
-    if (!isAuthenticated) {
-        if (isLoading) {
-            return <LoadingScreen />;
-        }
-
-        return (
-            <PasswordScreen
-                passwordInput={passwordInput}
-                setPasswordInput={setPasswordInput}
-                handlePasswordSubmit={handlePasswordSubmit}
-                passwordError={passwordError}
-            />
-        );
-    }
-
-    // Show loading screen while initializing
-    if (isLoading) {
-        return <LoadingScreen />;
-    }
-
     return (
-        <div className="min-h-screen p-4 md:p-8">
-            <div className="max-w-3xl mx-auto space-y-6">
-                {/* Header Card */}
+        <div className="h-full flex items-center justify-center p-4 md:p-8">
+            <div className="w-full max-w-3xl">
                 <Card className="shadow-lg border-0">
                     <CardHeader className="text-center pb-4">
                         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
                             <Video className="h-7 w-7 text-primary" />
                         </div>
-                        <CardTitle className="text-2xl font-bold">Video Uploader</CardTitle>
+                        <CardTitle className="text-2xl font-bold">Upload Video</CardTitle>
                         <CardDescription className="text-sm">
                             Chunked uploads with parallel processing
                         </CardDescription>
@@ -435,7 +312,6 @@ const VideoUploader = () => {
                                     <p className="text-sm text-muted-foreground">
                                         or click to browse
                                     </p>
-
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-4 p-6">
@@ -525,7 +401,7 @@ const VideoUploader = () => {
                                             <Button
                                                 size="sm"
                                                 variant={copied ? "default" : "outline"}
-                                                onClick={() => handleCopyUrl()}
+                                                onClick={handleCopyUrl}
                                             >
                                                 {copied ? (
                                                     <>
@@ -573,53 +449,9 @@ const VideoUploader = () => {
                         )}
                     </CardContent>
                 </Card>
-
-                {/* Upload History - Always visible */}
-                <UploadHistory
-                    uploadHistory={uploadHistory}
-                    onCopyUrl={handleCopyUrl}
-                    onDelete={(id, fileName) => setDeleteConfirm({ show: true, id, fileName })}
-                    onClearAll={() => setShowClearConfirm(true)}
-                    copiedId={copiedId}
-                />
             </div>
-
-            {/* Clear All Confirmation Modal */}
-            <ConfirmationModal
-                show={showClearConfirm}
-                title="Clear All History"
-                description="This action cannot be undone"
-                content={
-                    <p className="text-sm text-muted-foreground">
-                        Are you sure you want to delete all {uploadHistory.length} uploaded video records? This will permanently remove all history.
-                    </p>
-                }
-                onConfirm={handleClearHistory}
-                onCancel={() => setShowClearConfirm(false)}
-                confirmText="Delete All"
-            />
-
-            {/* Individual Delete Confirmation Modal */}
-            <ConfirmationModal
-                show={deleteConfirm.show}
-                title="Delete Video"
-                description="This action cannot be undone"
-                content={
-                    <>
-                        <p className="text-sm text-muted-foreground mb-2">
-                            Are you sure you want to delete this video?
-                        </p>
-                        <p className="text-sm font-medium truncate">
-                            {deleteConfirm.fileName}
-                        </p>
-                    </>
-                }
-                onConfirm={() => handleRemoveHistoryItem(deleteConfirm.id)}
-                onCancel={() => setDeleteConfirm({ show: false, id: null, fileName: "" })}
-                confirmText="Delete"
-            />
         </div>
     );
 };
 
-export default VideoUploader;
+export default UploadPage;
