@@ -391,15 +391,6 @@ const VideoUploader = () => {
             <div className="max-w-3xl mx-auto space-y-6">
                 {/* Header Card */}
                 <Card className="shadow-lg border-0">
-                    <CardHeader className="text-center pb-4">
-                        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-                            <Video className="h-7 w-7 text-primary" />
-                        </div>
-                        <CardTitle className="text-2xl font-bold">Video Uploader</CardTitle>
-                        <CardDescription className="text-sm">
-                            Chunked uploads with parallel processing
-                        </CardDescription>
-                    </CardHeader>
                     <CardContent>
                         {/* Drop Zone */}
                         <div
