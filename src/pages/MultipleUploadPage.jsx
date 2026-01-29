@@ -172,11 +172,11 @@ const MultipleUploadPage = () => {
 
     const uploadSingleVideo = async (video) => {
         const startTime = Date.now();
-        
+
         // Create unique filename with timestamp (same as single upload)
         const ext = video.file.name.split('.').pop();
         const uniqueFileName = `${video.name}_${Date.now()}.${ext}`;
-        
+
         const chunks = Math.ceil(video.file.size / CHUNK_SIZE);
         setTotalChunks(chunks);
         setChunksCompleted(0);

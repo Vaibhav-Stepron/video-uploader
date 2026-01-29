@@ -65,8 +65,8 @@ const Layout = () => {
                             to={item.path}
                             onClick={onItemClick}
                             className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${isActive
-                                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
-                                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                                ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                                : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                                 }`}
                         >
                             <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${isActive ? "bg-white/20" : "bg-secondary group-hover:bg-primary/10"
@@ -166,7 +166,7 @@ const Layout = () => {
                                 <Moon className="h-5 w-5 text-slate-700" />
                             )}
                         </Button>
-                        
+
                         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
                             <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                             <span className="text-xs font-medium text-primary">Online</span>
