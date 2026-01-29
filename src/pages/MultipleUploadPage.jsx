@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { cn, formatFileSize } from "@/lib/utils";
-import { addUpload } from "@/lib/indexedDB";
+import { addUpload, initDB } from "@/lib/indexedDB";
+import confetti from "canvas-confetti";
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const PARALLEL_UPLOADS = 3;
@@ -38,6 +39,18 @@ const MultipleUploadPage = () => {
     const abortControllerRef = useRef(null);
     const videoPreviewRef = useRef(null);
     const wakeLockRef = useRef(null);
+
+    // Initialize IndexedDB on mount
+    useEffect(() => {
+        const initialize = async () => {
+            try {
+                await initDB();
+            } catch (error) {
+                console.error("Failed to initialize IndexedDB:", error);
+            }
+        };
+        initialize();
+    }, []);
 
     useEffect(() => {
         const requestWakeLock = async () => {
@@ -119,10 +132,10 @@ const MultipleUploadPage = () => {
         setPreviewVideo(null);
     };
 
-    const uploadChunk = async (file, chunkIndex, totalChunks, signal) => {
+    const uploadChunk = async (file, chunkIndex, totalChunks, signal, fileName) => {
         const start = chunkIndex * CHUNK_SIZE;
         const chunk = file.slice(start, Math.min(start + CHUNK_SIZE, file.size));
-        const encodedFileName = encodeURIComponent(file.name);
+        const encodedFileName = encodeURIComponent(fileName);
 
         const formData = new FormData();
         formData.append("FileName", encodedFileName);
@@ -141,8 +154,8 @@ const MultipleUploadPage = () => {
         return response.json();
     };
 
-    const finalizeUpload = async (file, totalChunks) => {
-        const encodedFileName = encodeURIComponent(file.name);
+    const finalizeUpload = async (file, totalChunks, fileName) => {
+        const encodedFileName = encodeURIComponent(fileName);
         const formData = new FormData();
         formData.append("FileName", encodedFileName);
         formData.append("MimeType", file.type);
@@ -159,6 +172,11 @@ const MultipleUploadPage = () => {
 
     const uploadSingleVideo = async (video) => {
         const startTime = Date.now();
+        
+        // Create unique filename with timestamp (same as single upload)
+        const ext = video.file.name.split('.').pop();
+        const uniqueFileName = `${video.name}_${Date.now()}.${ext}`;
+        
         const chunks = Math.ceil(video.file.size / CHUNK_SIZE);
         setTotalChunks(chunks);
         setChunksCompleted(0);
@@ -177,7 +195,8 @@ const MultipleUploadPage = () => {
                             video.file,
                             idx,
                             chunks,
-                            abortControllerRef.current.signal
+                            abortControllerRef.current.signal,
+                            uniqueFileName
                         ).then(() => {
                             completed++;
                             setChunksCompleted(completed);
@@ -189,17 +208,28 @@ const MultipleUploadPage = () => {
             }
 
             updateVideo(video.id, { progress: 98 });
-            const result = await finalizeUpload(video.file, chunks);
+            const result = await finalizeUpload(video.file, chunks, uniqueFileName);
             const url = result.Url || result.url;
             const uploadDuration = Date.now() - startTime;
 
             await addUpload({
-                fileName: video.name,
+                fileName: uniqueFileName,
                 url,
                 fileSize: video.file.size,
                 uploadDuration,
                 platform: video.platform,
                 originalFileName: video.file.name,
+            });
+
+            // Trigger confetti celebration for successful upload
+            const colors = ['#00b37e', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b'];
+            confetti({
+                particleCount: 80,
+                spread: 60,
+                origin: { y: 0.6 },
+                colors,
+                shapes: ['square', 'circle'],
+                scalar: 0.8,
             });
 
             updateVideo(video.id, {

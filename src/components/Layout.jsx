@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { Upload, Clock, Video, Menu, X, FolderUp, Settings, ChevronRight } from "lucide-react";
+import { Upload, Clock, Video, Menu, X, FolderUp, Settings, ChevronRight, Sun, Moon, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/context/ThemeContext";
 
 const Layout = () => {
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const { theme, toggleTheme } = useTheme();
 
     const navItems = [
         {
@@ -25,6 +27,12 @@ const Layout = () => {
             label: "History",
             icon: Clock,
             description: "View upload history"
+        },
+        {
+            path: "/changelog",
+            label: "Changelog",
+            icon: FileText,
+            description: "View updates & changes"
         },
     ];
 
@@ -144,6 +152,21 @@ const Layout = () => {
 
                     {/* Right side actions */}
                     <div className="flex items-center gap-2">
+                        {/* Theme toggle button */}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={toggleTheme}
+                            className="rounded-lg"
+                            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+                        >
+                            {theme === 'dark' ? (
+                                <Sun className="h-5 w-5 text-yellow-500" />
+                            ) : (
+                                <Moon className="h-5 w-5 text-slate-700" />
+                            )}
+                        </Button>
+                        
                         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
                             <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                             <span className="text-xs font-medium text-primary">Online</span>
