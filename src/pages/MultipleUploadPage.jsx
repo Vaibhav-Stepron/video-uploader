@@ -25,7 +25,7 @@ import confetti from "canvas-confetti";
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const PARALLEL_UPLOADS = 3;
-const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const BASE_URL = "https://bimiscwebapi-staging.azurewebsites.net/api/Users";
 const PLATFORMS = ["Android", "iOS", "Web"];
 
 const MultipleUploadPage = () => {

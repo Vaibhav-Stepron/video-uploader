@@ -34,7 +34,7 @@ import ConfirmationModal from "./ConfirmationModal";
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
 const PARALLEL_UPLOADS = 3;
-const BASE_URL = import.meta.env.VITE_API_BASE_URL
+const BASE_URL = "https://bimiscwebapi-staging.azurewebsites.net/api/Users"
 
 const VideoUploader = () => {
     const [selectedFile, setSelectedFile] = useState(null);
